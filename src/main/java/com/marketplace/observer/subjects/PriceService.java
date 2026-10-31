@@ -7,9 +7,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Первый источник данных (Subject 1) - Управление ценами.
- */
 public class PriceService extends AbstractSubject<PriceChangedEvent> {
     private final Map<String, Money> priceStore = new ConcurrentHashMap<>();
 

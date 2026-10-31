@@ -5,9 +5,6 @@ import com.marketplace.observer.api.Observer;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Слушатель 2: Сбрасывает поисковый кэш при любых изменениях цен или остатков.
- */
 public class SearchCacheInvalidator implements Observer<Event> {
     private final AtomicInteger invalidationCount = new AtomicInteger(0);
 

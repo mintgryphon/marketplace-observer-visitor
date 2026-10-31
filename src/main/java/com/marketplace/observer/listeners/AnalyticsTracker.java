@@ -5,9 +5,6 @@ import com.marketplace.observer.events.PriceChangedEvent;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Слушатель 3: Подсчитывает общую аналитику по событиям цен.
- */
 public class AnalyticsTracker implements Observer<PriceChangedEvent> {
     private final AtomicInteger totalEventsRecorded = new AtomicInteger(0);
 

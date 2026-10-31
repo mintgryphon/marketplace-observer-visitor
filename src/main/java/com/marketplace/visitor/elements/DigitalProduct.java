@@ -6,9 +6,6 @@ import com.marketplace.visitor.api.CatalogVisitor;
 
 import java.util.Objects;
 
-/**
- * Лист 2: Цифровой товар (лицензия, загружаемый контент).
- */
 public class DigitalProduct implements CatalogElement {
     private final String id;
     private final String name;

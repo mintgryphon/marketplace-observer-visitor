@@ -8,10 +8,6 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.DoubleAdder;
 
-/**
- * Цепочка наблюдателей (Chain of Observers):
- * Выступает слушателем для PriceChangedEvent и одновременно Subject для MarketTrendEvent.
- */
 public class MarketplaceAggregator extends AbstractSubject<MarketTrendEvent> implements Observer<PriceChangedEvent> {
     private final AtomicInteger totalEvents = new AtomicInteger(0);
     private final AtomicInteger totalDrops = new AtomicInteger(0);

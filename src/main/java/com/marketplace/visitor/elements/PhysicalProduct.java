@@ -6,9 +6,6 @@ import com.marketplace.visitor.api.CatalogVisitor;
 
 import java.util.Objects;
 
-/**
- * Лист 1: Физический товар с весом и объемом.
- */
 public class PhysicalProduct implements CatalogElement {
     private final String id;
     private final String name;

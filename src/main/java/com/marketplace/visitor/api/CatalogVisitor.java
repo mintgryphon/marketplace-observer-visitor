@@ -7,9 +7,6 @@ import com.marketplace.visitor.elements.PhysicalProduct;
 import com.marketplace.visitor.elements.ServiceProduct;
 import com.marketplace.visitor.elements.SubscriptionProduct;
 
-/**
- * Generic-интерфейс посетителя с Double Dispatch.
- */
 public interface CatalogVisitor<R> {
     R visit(Catalog catalog);
     R visit(Category category);

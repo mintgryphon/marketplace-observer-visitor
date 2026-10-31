@@ -8,9 +8,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Уровень 1 (Корневой контейнер): Каталог маркетплейса.
- */
 public class Catalog implements CatalogElement {
     private final String id;
     private final String name;

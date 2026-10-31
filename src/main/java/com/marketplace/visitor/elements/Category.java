@@ -8,9 +8,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Уровень 2 (Промежуточный контейнер): Категория / подкатегория.
- */
 public class Category implements CatalogElement {
     private final String id;
     private final String name;

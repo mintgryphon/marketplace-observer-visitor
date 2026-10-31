@@ -5,9 +5,6 @@ import com.marketplace.observer.events.StockChangedEvent;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Слушатель 4: Фиксирует инциденты обнуления остатков на складе.
- */
 public class InventoryAuditor implements Observer<StockChangedEvent> {
     private final AtomicInteger outOfStockAlerts = new AtomicInteger(0);
 

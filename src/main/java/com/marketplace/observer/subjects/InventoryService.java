@@ -6,9 +6,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Второй источник данных (Subject 2) - Складские остатки.
- */
 public class InventoryService extends AbstractSubject<StockChangedEvent> {
     private final Map<String, Integer> stockStore = new ConcurrentHashMap<>();
 

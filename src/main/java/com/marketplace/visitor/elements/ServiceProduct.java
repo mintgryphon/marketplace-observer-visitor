@@ -6,9 +6,6 @@ import com.marketplace.visitor.api.CatalogVisitor;
 
 import java.util.Objects;
 
-/**
- * Лист 3: Услуга (настройка, сборка, консультация).
- */
 public class ServiceProduct implements CatalogElement {
     private final String id;
     private final String name;

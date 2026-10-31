@@ -6,9 +6,6 @@ import com.marketplace.visitor.api.CatalogVisitor;
 
 import java.util.Objects;
 
-/**
- * Лист 4: Подписка (периодический платеж).
- */
 public class SubscriptionProduct implements CatalogElement {
     private final String id;
     private final String name;
