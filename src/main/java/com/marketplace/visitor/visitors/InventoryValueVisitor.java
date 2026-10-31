@@ -52,4 +52,11 @@ public class InventoryValueVisitor implements CatalogVisitor<InventoryReport> {
         totalValue = totalValue.add(product.getTotalContractValue());
         return new InventoryReport(itemCount, totalValue);
     }
+
+    @Override
+    public InventoryReport visit(GiftCardProduct product) {
+        itemCount += 1;
+        totalValue = totalValue.add(product.getDenomination());
+        return new InventoryReport(itemCount, totalValue);
+    }
 }

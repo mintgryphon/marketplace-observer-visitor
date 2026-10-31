@@ -47,4 +47,9 @@ public class ShippingCostVisitor implements CatalogVisitor<Money> {
     public Money visit(SubscriptionProduct product) {
         return Money.ZERO;
     }
+
+    @Override
+    public Money visit(GiftCardProduct product) {
+        return Money.ZERO;
+    }
 }

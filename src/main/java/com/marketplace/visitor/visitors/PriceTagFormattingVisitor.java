@@ -53,4 +53,11 @@ public class PriceTagFormattingVisitor implements CatalogVisitor<List<String>> {
                 product.getName(), product.getMonthlyFee(), product.getPeriodInMonths()));
         return priceTags;
     }
+
+    @Override
+    public List<String> visit(GiftCardProduct product) {
+        priceTags.add(String.format("[GIFT CARD] %s - Denomination: %s",
+                product.getName(), product.getDenomination()));
+        return priceTags;
+    }
 }

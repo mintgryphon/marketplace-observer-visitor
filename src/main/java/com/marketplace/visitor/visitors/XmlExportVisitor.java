@@ -86,4 +86,14 @@ public class XmlExportVisitor implements CatalogVisitor<String> {
                 .append("\"/>\n");
         return xml.toString();
     }
+
+    @Override
+    public String visit(GiftCardProduct product) {
+        appendIndent();
+        xml.append("<giftCardProduct id=\"").append(product.getId())
+                .append("\" name=\"").append(product.getName())
+                .append("\" denomination=\"").append(product.getDenomination())
+                .append("\"/>\n");
+        return xml.toString();
+    }
 }

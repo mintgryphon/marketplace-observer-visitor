@@ -63,4 +63,12 @@ public class ProductFilterVisitor implements CatalogVisitor<List<CatalogElement>
         }
         return matched;
     }
+
+    @Override
+    public List<CatalogElement> visit(GiftCardProduct product) {
+        if (product.getDenomination().isLessThan(maxPrice) || product.getDenomination().equals(maxPrice)) {
+            matched.add(product);
+        }
+        return matched;
+    }
 }
