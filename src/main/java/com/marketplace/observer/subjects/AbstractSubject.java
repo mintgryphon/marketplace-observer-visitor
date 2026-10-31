@@ -40,7 +40,7 @@ public abstract class AbstractSubject<E extends Event> implements Subject<E> {
     @Override
     public void notifyObservers(E event) {
         if (event == null) return;
-        List<Observer<E>> list = listeners.get(event.getEventType());
+        List<Observer<E>> list = listeners.get(event.eventType());
         if (list != null) {
             for (Observer<E> observer : list) {
                 observer.onEvent(event);
