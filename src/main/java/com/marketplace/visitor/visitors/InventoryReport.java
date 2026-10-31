@@ -1,4 +1,8 @@
 package com.marketplace.visitor.visitors;
 
-public class InventoryReport {
-}
+import com.marketplace.common.Money;
+
+public record InventoryReport(
+        int totalItemsCount,
+        Money totalValue
+) {}
