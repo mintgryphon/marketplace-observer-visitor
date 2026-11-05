@@ -69,22 +69,7 @@ Note: the catalog tree is the master data (stock and list prices); `PriceService
 
 ---
 
-## 4. Trade-off Proof (Visitor)
-
-### Commit A — new operation: `f7840a9` *add PriceTagFormattingVisitor touching zero element classes*
-* Added: `visitor/visitors/PriceTagFormattingVisitor.java`
-* **Cost:** one new file, zero element classes touched. New operations are cheap (Open-Closed for operations).
-
-### Commit B — new element: `ed8cf5c` *add GiftCardProduct requiring updates across all visitor classes*
-* Added: `visitor/elements/GiftCardProduct.java`
-* Modified: `visitor/api/CatalogVisitor.java`, `ShippingCostVisitor.java`, `InventoryValueVisitor.java`, `ProductFilterVisitor.java`, `XmlExportVisitor.java`, `PriceTagFormattingVisitor.java` (7 files)
-* **Cost:** one new `visit` method in the interface forces a change in **every** visitor. The compiler helps (forgotten visitors do not compile), but the change spreads across the codebase.
-
-**When we would reject Visitor:** when new element types appear more often than new operations (e.g. a marketplace where sellers add new product kinds every week), or when visitors are owned by other teams/modules. Then plain polymorphism (a method on each element) or a type-to-handler map is cheaper.
-
----
-
-## 5. Tests (26)
+## 4. Tests (26)
 
 | Area | Test class | What is checked |
 |---|---|---|
@@ -100,6 +85,6 @@ Note: the catalog tree is the master data (stock and list prices); `PriceService
 
 ---
 
-## 6. UML class diagram
+## 5. UML class diagram
 
 See [`diagram.puml`](diagram.puml) (PlantUML; render with any PlantUML viewer or the IntelliJ PlantUML plugin).
