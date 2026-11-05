@@ -40,6 +40,9 @@ class ObserverChainTest {
         assertEquals(2, trendEventsReceived.get());
         assertNotNull(lastTrend.get());
         assertEquals(6, lastTrend.get().totalEventsAnalyzed());
+        // hand-calculated: drops 100->80 (20%), 200->100 (50%), 50->40 (20%) => 3 drops, avg 30%
+        assertEquals(3, lastTrend.get().totalPriceDrops());
+        assertEquals(30.0, lastTrend.get().averageDiscountPercent(), 1e-9);
     }
 
     @Test

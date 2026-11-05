@@ -1,5 +1,6 @@
 package com.marketplace.observer.subjects;
 
+import com.marketplace.observer.api.EventType;
 import com.marketplace.observer.events.StockChangedEvent;
 
 import java.time.Instant;
@@ -8,6 +9,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InventoryService extends AbstractSubject<StockChangedEvent> {
     private final Map<String, Integer> stockStore = new ConcurrentHashMap<>();
+
+    public InventoryService() {
+        super(EventType.STOCK_CHANGED);
+    }
 
     public void updateStock(String productId, String categoryId, int newStock) {
         Integer oldStock = stockStore.put(productId, newStock);

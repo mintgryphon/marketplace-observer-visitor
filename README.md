@@ -1,154 +1,105 @@
 # Assignment 6: Observer and Visitor Patterns
 
-**Domain Topic:** Online Marketplace  
-**Variant Focus:**  
-* **Live data (Observer):** Price and stock changes → Wishlist notifier, price-drop alert, analytics tracker, search cache invalidator, chain aggregator.
-* **Catalog hierarchy (Visitor):** Catalog → Category → Physical, Digital, Service, Subscription, and Gift Card products; shipping calculation, inventory valuation, category filtering, and hand-written XML export.
-* **Technology:** Java 17, JUnit 5, Maven (no third-party event bus or serialization libraries).
+**Domain Topic:** Online Marketplace
+* **Live data (Observer):** price and stock changes → wishlist notifier, search cache invalidator, analytics tracker, inventory auditor, price-drop alert, market aggregator (chain) → trend dashboard.
+* **Catalog hierarchy (Visitor):** Catalog → Category (categories can be nested) → Physical, Digital, Service, Subscription and Gift Card products; shipping cost, inventory valuation, price filter, price tags and hand-written XML export.
+* **Technology:** Java 17, JUnit 5, Maven (no event-bus or serialization libraries).
+
+```bash
+mvn test                                         # 26 JUnit tests
+mvn compile
+java -cp target/classes com.marketplace.Main 4 20   # [producerThreads] [eventsPerProducer], defaults 3 and 10
+```
 
 ---
 
-## 1. Architectural Decisions
+## 1. Design Decisions
 
-### Observer: Push vs Pull
-* **Decision:** Push model.
-* **Justification:** Events (`PriceChangedEvent`, `StockChangedEvent`, `MarketTrendEvent`) are modeled as immutable records containing all state changes (`productId`, `oldPrice`, `newPrice`, `timestamp`). Listeners receive full state instantly without issuing blocking read callbacks to the subject. This minimizes coupling, prevents inconsistent state reads during high-concurrency event bursts, and eliminates deadlocks between publisher and subscriber threads.
+### Observer: push vs pull
+* **Decision:** push model.
+* **Why:** every event (`PriceChangedEvent`, `StockChangedEvent`, `MarketTrendEvent`, `InspectionReportEvent`) is an immutable `record` carrying everything a listener needs (`productId`, `oldPrice`, `newPrice`, `timestamp`, ...). Listeners never call back into the subject, so they cannot read a price that another thread has already changed again, and the subject does not need to expose its internal stores.
+* **Cost:** if a listener later needs more data, the event record has to grow.
 
-### Visitor: Traversal in Visitor vs Traversal in Tree
-* **Decision:** Traversal implemented inside Visitor.
-* **Justification:** Composite tree elements (`Catalog`, `Category`) hold data only and remain strictly stable, exposing only their children collections. The visitors control iteration depth, enabling selective branching, short-circuiting during filtering operations, and contextual state accumulation (e.g., indentation depth in `XmlExportVisitor`).
+### Subscription per event type
+* `Subject.subscribe(EventType, Observer<? super E>)`. Each subject declares in its constructor which types it publishes; subscribing to any other type fails fast with `IllegalArgumentException`.
+* `? super E` lets one listener serve several subjects: `SearchCacheInvalidator implements Observer<Event>` is subscribed both to `PriceService` and `InventoryService`.
 
----
+### Chain of observers
+* `MarketplaceAggregator` is an `Observer<PriceChangedEvent>` **and** an `AbstractSubject<MarketTrendEvent>`: every N price events it republishes an aggregated `MarketTrendEvent`, consumed by `MarketTrendDashboard`.
 
-## 2. Observer and Visitor Integration Link
+### Visitor: who does the traversal
+* **Decision:** the visitor traverses; the tree only exposes its children.
+* **Why:** element classes stay pure data, and each visitor decides how to combine child results (sum for money, merge for lists, wrap-and-indent for XML).
+* To avoid copying the same loop into every visitor, `AggregatingCatalogVisitor<R>` implements `visit(Catalog)` and `visit(Category)` once; subclasses only provide `empty()` and `combine()`. `XmlExportVisitor` implements `CatalogVisitor` directly because a container must *wrap* its children, not just combine them.
 
-* **Trigger:** When `PriceService` broadcasts a `PriceChangedEvent` exceeding the configured threshold (e.g., discount ≥ 20%), the `PriceDropAlertService` intercepts it.
-* **Execution:** Instead of inspecting the entire tree, `PriceDropAlertService` locates the specific affected `Category` subtree.
-* **Action:** It executes `InventoryValueVisitor` on that subtree to produce an `InventoryReport` detailing the remaining stock and capital valuation of that department.
-* **Downstream Result:** The inspection results are channeled into a structured alert log and forwarded to `MarketplaceAggregator`, which computes moving market trend indicators.
+### Stateless visitors
+* Visitors return results instead of mutating fields. Consequences: the same instance can be reused (`VisitorReuseTest`), and one `InventoryValueVisitor` is safely shared by all producer threads inside `PriceDropAlertService`.
 
----
+### Double dispatch (why not `visitor.visit(node)`)
+Overloads are chosen at compile time from the *static* type. For `CatalogElement node` there is no `visit(CatalogElement)`, so the call does not compile.
+`node.accept(v)` is the 1st dispatch (virtual call on the real class, e.g. `PhysicalProduct`); inside, `visitor.visit(this)` has static type `PhysicalProduct`, so the compiler picks `visit(PhysicalProduct)` — the 2nd dispatch on the visitor type.
 
-## 3. Concurrency and Thread Safety (Clean Code ch. 13)
-
-* **Producer Threads:** A configurable `ExecutorService` fixed pool (tested with 3 to 4 concurrent producer threads) generates events concurrently.
-* **Registry Safety:** `AbstractSubject` uses a `ConcurrentHashMap<EventType, List<Observer<? super E>>>` where listener lists are backed by `CopyOnWriteArrayList`.
-* **Zero Locking:** No synchronized blocks lock the whole subject. Listeners can dynamically register or safely unsubscribe from inside their own `onEvent` callback without triggering `ConcurrentModificationException`.
-* **Graceful Shutdown:** `Main` executes orderly termination via `executorService.shutdown()` followed by bounded `awaitTermination()`, ensuring zero lost events and no orphaned threads.
-
----
-
-## 4. Trade-off Proof (Visitor Pattern)
-
-### Commit A: Adding a New Operation
-* **Commit Hash / Message:** `feat(tradeoff-proof): add PriceTagFormattingVisitor touching zero element classes`
-* **Changed Files:**
-  * Added: `src/main/java/com/marketplace/visitor/visitors/PriceTagFormattingVisitor.java`
-* **Architectural Cost:** Zero modification of existing element classes (`Catalog`, `Category`, `PhysicalProduct`, etc.). Demonstrates full adherence to the Open-Closed Principle for new operations.
-
-### Commit B: Adding a New Element Type
-* **Commit Hash / Message:** `feat(tradeoff-proof): add GiftCardProduct requiring updates across all visitor classes`
-* **Changed Files:**
-  * Added: `src/main/java/com/marketplace/visitor/elements/GiftCardProduct.java`
-  * Modified: `src/main/java/com/marketplace/visitor/api/CatalogVisitor.java`
-  * Modified: `src/main/java/com/marketplace/visitor/visitors/ShippingCostVisitor.java`
-  * Modified: `src/main/java/com/marketplace/visitor/visitors/InventoryValueVisitor.java`
-  * Modified: `src/main/java/com/marketplace/visitor/visitors/ProductFilterVisitor.java`
-  * Modified: `src/main/java/com/marketplace/visitor/visitors/XmlExportVisitor.java`
-  * Modified: `src/main/java/com/marketplace/visitor/visitors/PriceTagFormattingVisitor.java`
-* **Architectural Cost:** High cascading modification. Adding one new data leaf forced signature additions across the visitor interface and re-compilation/editing of all 5 existing visitor implementations.
+### Element classes hold data only
+Elements have fields, getters and `accept`. `ServiceProduct.getTotalPrice()` and `SubscriptionProduct.getTotalContractValue()` are derived values of the element's own fields, not operations over the tree.
 
 ---
 
-## 5. PlantUML Architecture Diagram
+## 2. Integration: alert → inspection → ticket
 
-```plantuml
-@startuml
-skinparam style strictuml
-skinparam classAttributeIconSize 0
+1. `PriceService` publishes a `PriceChangedEvent`.
+2. `PriceDropAlertService` (observer) checks the discount; if it is ≥ 20 % it finds the product's category (recursive search, nested categories included).
+3. It runs the injected `InventoryValueVisitor` **only on that category subtree**.
+4. The `InventoryReport` goes back into the system as a new `InspectionReportEvent` (the alert service is also a subject).
+5. `PromotionTicketDesk` receives it and opens a promotion ticket.
 
-package "com.marketplace.observer" {
-    interface Subject<E Event extends> {
-        +subscribe(type: EventType, observer: Observer<? super E>): void
-        +unsubscribe(type: EventType, observer: Observer<? super E>): void
-        +notifyObservers(event: E): void
-    }
+Tested in `InspectionReportFlowTest` (subtree only, nested category, no ticket for a small drop or unknown category).
 
-    interface Observer<E Event extends> {
-        +onEvent(event: E): void
-    }
+Note: the catalog tree is the master data (stock and list prices); `PriceService` holds live prices. The inspection reports the category's catalog valuation at the moment of the price drop.
 
-    abstract class AbstractSubject<E Event extends> implements Subject {
-        -listeners: Map<EventType, E List<Observer<? super>>>
-    }
+---
 
-    class PriceService extends AbstractSubject {
-        +updatePrice(productId: String, categoryId: String, newPrice: Money): void
-    }
+## 3. Concurrency (Clean Code ch. 13)
 
-    class InventoryService extends AbstractSubject {
-        +updateStock(productId: String, categoryId: String, newStock: int): void
-    }
+* **Producers:** `Main` runs `CatalogEventProducer` tasks on `Executors.newFixedThreadPool(n)`; `n` is the first program argument (default 3).
+* **Registry:** `AbstractSubject` builds an `EnumMap<EventType, CopyOnWriteArrayList<Observer>>` in the constructor. The map is never modified afterwards; only the lists change, and they are thread-safe. No lock on the whole subject, no lazy initialization.
+* **Unsubscribe while publishing:** `notifyObservers` iterates over a snapshot of the list, so `unsubscribe` from another thread or from inside a handler never throws `ConcurrentModificationException`. A listener removed during a publish may still receive the event that was already being delivered; it will not receive later ones. Tested in `DynamicSubscriptionTest` and `ConcurrentSubscriptionTest` (4 publishers + one thread that subscribes/unsubscribes in a loop).
+* **Failing listener:** an exception in one listener is caught and counted (`getFailedDeliveries()`); the others still get the event.
+* **Shared state:** listener counters use `AtomicInteger`; `MarketplaceAggregator` keeps all its counters in one immutable `Stats` record swapped with `AtomicReference.updateAndGet`, so every published trend is a consistent snapshot. Stores in the services are `ConcurrentHashMap`; `put` returns the old value atomically, so `oldPrice/newPrice` in an event always match.
+* **Graceful shutdown:** `shutdown()` → `awaitTermination(10 s)` → `shutdownNow()` only if tasks hang. Events are delivered synchronously in the producer thread, so when the pool has terminated every event has been delivered. `Main` prints `Price events expected / delivered` (e.g. `42 / 42` for 4 threads × 20 events).
 
-    class MarketplaceAggregator extends AbstractSubject implements Observer {
-        +onEvent(event: PriceChangedEvent): void
-    }
+---
 
-    class WishlistNotifier implements Observer {
-        +onEvent(event: PriceChangedEvent): void
-    }
+## 4. Trade-off Proof (Visitor)
 
-    class PriceDropAlertService implements Observer {
-        -catalog: Catalog
-        +onEvent(event: PriceChangedEvent): void
-    }
-}
+### Commit A — new operation: `f7840a9` *add PriceTagFormattingVisitor touching zero element classes*
+* Added: `visitor/visitors/PriceTagFormattingVisitor.java`
+* **Cost:** one new file, zero element classes touched. New operations are cheap (Open-Closed for operations).
 
-package "com.marketplace.visitor" {
-    interface CatalogElement {
-        +accept(visitor: CatalogVisitor<R>): R
-    }
+### Commit B — new element: `ed8cf5c` *add GiftCardProduct requiring updates across all visitor classes*
+* Added: `visitor/elements/GiftCardProduct.java`
+* Modified: `visitor/api/CatalogVisitor.java`, `ShippingCostVisitor.java`, `InventoryValueVisitor.java`, `ProductFilterVisitor.java`, `XmlExportVisitor.java`, `PriceTagFormattingVisitor.java` (7 files)
+* **Cost:** one new `visit` method in the interface forces a change in **every** visitor. The compiler helps (forgotten visitors do not compile), but the change spreads across the codebase.
 
-    interface CatalogVisitor<R> {
-        +visit(catalog: Catalog): R
-        +visit(category: Category): R
-        +visit(product: PhysicalProduct): R
-        +visit(product: DigitalProduct): R
-        +visit(product: ServiceProduct): R
-        +visit(product: SubscriptionProduct): R
-        +visit(product: GiftCardProduct): R
-    }
+**When we would reject Visitor:** when new element types appear more often than new operations (e.g. a marketplace where sellers add new product kinds every week), or when visitors are owned by other teams/modules. Then plain polymorphism (a method on each element) or a type-to-handler map is cheaper.
 
-    class Catalog implements CatalogElement {
-        -categories: List<Category>
-        +accept(visitor: CatalogVisitor<R>): R
-    }
+---
 
-    class Category implements CatalogElement {
-        -children: List<CatalogElement>
-        +accept(visitor: CatalogVisitor<R>): R
-    }
+## 5. Tests (26)
 
-    class PhysicalProduct implements CatalogElement {
-        -price: Money
-        -weightKg: double
-        +accept(visitor: CatalogVisitor<R>): R
-    }
+| Area | Test class | What is checked |
+|---|---|---|
+| Observer | `DynamicSubscriptionTest` | subscribe at runtime, unsubscribe, unsubscribe from inside own handler, null event |
+| Observer | `ObserverRobustnessTest` | failing listener does not stop others, wrong event type rejected |
+| Observer | `ObserverChainTest` | aggregator republishes trends; hand-calculated average discount 30 % |
+| Concurrency | `ConcurrencyStressTest` | 4 threads × 1,000 events = exactly 4,000 delivered |
+| Concurrency | `ConcurrentSubscriptionTest` | listeners join/leave while 4 threads publish; exact count, no failures |
+| Visitor | `InventoryValueVisitorTest`, `ShippingCostVisitorTest`, `ProductFilterVisitorTest` | hand-calculated values (760.00, 20.00, minimum fee 5.00, ...) |
+| Visitor | `XmlExportVisitorTest` | exact nested XML, escaping of `& < > "` |
+| Visitor | `VisitorReuseTest`, `PriceTagFormattingVisitorTest` | reusing one instance gives the same result; nested categories; gift card |
+| Integration | `IntegrationWorkflowTest`, `InspectionReportFlowTest` | alert → visitor on subtree → `InspectionReportEvent` → ticket |
 
-    class DigitalProduct implements CatalogElement {
-        -price: Money
-        -downloadSizeMb: double
-        +accept(visitor: CatalogVisitor<R>): R
-    }
+---
 
-    class ShippingCostVisitor implements CatalogVisitor
-    class InventoryValueVisitor implements CatalogVisitor
-    class ProductFilterVisitor implements CatalogVisitor
-    class XmlExportVisitor implements CatalogVisitor
-    class PriceTagFormattingVisitor implements CatalogVisitor
-}
+## 6. UML class diagram
 
-PriceDropAlertService --> Catalog : inspects subtree via
-PriceDropAlertService ..> InventoryValueVisitor : invokes
-PriceService o-- PriceChangedEvent : publishes
-@enduml
+See [`diagram.puml`](diagram.puml) (PlantUML; render with any PlantUML viewer or the IntelliJ PlantUML plugin).

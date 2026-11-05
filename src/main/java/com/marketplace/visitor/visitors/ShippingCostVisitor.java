@@ -1,36 +1,27 @@
 package com.marketplace.visitor.visitors;
 
 import com.marketplace.common.Money;
-import com.marketplace.visitor.api.CatalogElement;
-import com.marketplace.visitor.api.CatalogVisitor;
 import com.marketplace.visitor.elements.*;
 
-public class ShippingCostVisitor implements CatalogVisitor<Money> {
+/** Numeric visitor: total shipping cost of a subtree. */
+public class ShippingCostVisitor extends AggregatingCatalogVisitor<Money> {
     private static final double RATE_PER_KG = 2.50;
+    private static final double MINIMUM_PARCEL_FEE = 5.00;
     private static final double SERVICE_TRAVEL_FEE = 15.00;
 
     @Override
-    public Money visit(Catalog catalog) {
-        Money total = Money.ZERO;
-        for (Category category : catalog.getCategories()) {
-            total = total.add(category.accept(this));
-        }
-        return total;
+    protected Money empty() {
+        return Money.ZERO;
     }
 
     @Override
-    public Money visit(Category category) {
-        Money total = Money.ZERO;
-        for (CatalogElement child : category.getChildren()) {
-            total = total.add(child.accept(this));
-        }
-        return total;
+    protected Money combine(Money left, Money right) {
+        return left.add(right);
     }
 
     @Override
     public Money visit(PhysicalProduct product) {
-        double cost = Math.max(5.0, product.getWeightKg() * RATE_PER_KG);
-        return Money.of(cost);
+        return Money.of(Math.max(MINIMUM_PARCEL_FEE, product.getWeightKg() * RATE_PER_KG));
     }
 
     @Override

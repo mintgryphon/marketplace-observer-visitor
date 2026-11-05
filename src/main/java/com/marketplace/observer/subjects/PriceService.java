@@ -1,6 +1,7 @@
 package com.marketplace.observer.subjects;
 
 import com.marketplace.common.Money;
+import com.marketplace.observer.api.EventType;
 import com.marketplace.observer.events.PriceChangedEvent;
 
 import java.time.Instant;
@@ -9,6 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PriceService extends AbstractSubject<PriceChangedEvent> {
     private final Map<String, Money> priceStore = new ConcurrentHashMap<>();
+
+    public PriceService() {
+        super(EventType.PRICE_CHANGED);
+    }
 
     public void updatePrice(String productId, String categoryId, Money newPrice) {
         Money oldPrice = priceStore.put(productId, newPrice);

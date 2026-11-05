@@ -5,46 +5,76 @@ import com.marketplace.observer.api.EventType;
 import com.marketplace.observer.api.Observer;
 import com.marketplace.observer.api.Subject;
 
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Thread-safe listener registry shared by all subjects.
+ * <ul>
+ *   <li>One {@link CopyOnWriteArrayList} per event type, created eagerly in the constructor.
+ *       The map itself is never modified afterwards, so it needs no locking.</li>
+ *   <li>Publishing iterates over a snapshot of the list: subscribe/unsubscribe from another thread,
+ *       or from inside a handler, never throws {@code ConcurrentModificationException} and never
+ *       blocks the publisher. No lock is taken on the whole subject.</li>
+ *   <li>A failing listener does not stop delivery to the remaining listeners.</li>
+ * </ul>
+ */
 public abstract class AbstractSubject<E extends Event> implements Subject<E> {
-    private final Map<EventType, List<Observer<? super E>>> listeners = new ConcurrentHashMap<>();
+    private final Map<EventType, List<Observer<? super E>>> listeners;
+    private final AtomicInteger failedDeliveries = new AtomicInteger(0);
+
+    protected AbstractSubject(EventType publishedType, EventType... morePublishedTypes) {
+        Set<EventType> types = EnumSet.of(publishedType, morePublishedTypes);
+        Map<EventType, List<Observer<? super E>>> registry = new EnumMap<>(EventType.class);
+        for (EventType type : types) {
+            registry.put(type, new CopyOnWriteArrayList<>());
+        }
+        this.listeners = registry;
+    }
 
     @Override
     public void subscribe(EventType eventType, Observer<? super E> observer) {
-        if (eventType == null || observer == null) {
-            throw new IllegalArgumentException("EventType and Observer must not be null");
+        if (observer == null) {
+            throw new IllegalArgumentException("Observer must not be null");
         }
-        listeners.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(observer);
+        listenersOf(eventType).add(observer);
     }
 
     @Override
     public void unsubscribe(EventType eventType, Observer<? super E> observer) {
-        if (eventType == null || observer == null) {
-            return;
-        }
-        List<Observer<? super E>> list = listeners.get(eventType);
-        if (list != null) {
-            list.remove(observer);
-        }
+        listenersOf(eventType).remove(observer);
     }
 
     @Override
     public void notifyObservers(E event) {
         if (event == null) return;
-        List<Observer<? super E>> list = listeners.get(event.eventType());
-        if (list != null) {
-            for (Observer<? super E> observer : list) {
+        for (Observer<? super E> observer : listenersOf(event.eventType())) {
+            try {
                 observer.onEvent(event);
+            } catch (RuntimeException failure) {
+                failedDeliveries.incrementAndGet();
             }
         }
     }
 
     public int getListenerCount(EventType eventType) {
-        List<Observer<? super E>> list = listeners.get(eventType);
-        return list == null ? 0 : list.size();
+        return listenersOf(eventType).size();
+    }
+
+    public int getFailedDeliveries() {
+        return failedDeliveries.get();
+    }
+
+    private List<Observer<? super E>> listenersOf(EventType eventType) {
+        List<Observer<? super E>> list = eventType == null ? null : listeners.get(eventType);
+        if (list == null) {
+            throw new IllegalArgumentException(getClass().getSimpleName() + " does not publish " + eventType);
+        }
+        return list;
     }
 }

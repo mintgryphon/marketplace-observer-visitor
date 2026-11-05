@@ -3,213 +3,148 @@ skinparam style strictuml
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
 skinparam shadowing false
-skinparam roundcorner 6
 
-title Online Marketplace Architecture
+title Online Marketplace - Observer + Visitor
 
-package "com.marketplace.common" {
-    class Money <<Value Object>> {
-        -amount: BigDecimal
-        +add(other: Money): Money
-        +subtract(other: Money): Money
-        +multiply(factor: double): Money
-        +isLessThan(other: Money): boolean
-    }
-}
-
-package "com.marketplace.observer.api" {
+package "observer.api" {
     enum EventType {
         PRICE_CHANGED
         STOCK_CHANGED
         MARKET_TREND
+        INSPECTION_REPORT
     }
-
     interface Event {
         +eventType(): EventType
         +timestamp(): Instant
     }
-
     interface "Observer<E extends Event>" as Observer {
         +onEvent(event: E): void
     }
-
     interface "Subject<E extends Event>" as Subject {
-        +subscribe(type: EventType, observer: Observer<? super E>): void
-        +unsubscribe(type: EventType, observer: Observer<? super E>): void
+        +subscribe(type: EventType, o: Observer<? super E>): void
+        +unsubscribe(type: EventType, o: Observer<? super E>): void
         +notifyObservers(event: E): void
     }
 }
 
-package "com.marketplace.observer.events" {
-    class PriceChangedEvent <<record>> implements Event {
-        -productId: String
-        -categoryId: String
-        -oldPrice: Money
-        -newPrice: Money
-        -timestamp: Instant
-        +getDiscountPercentage(): double
-    }
-
-    class StockChangedEvent <<record>> implements Event {
-        -productId: String
-        -categoryId: String
-        -oldStock: int
-        -newStock: int
-        -timestamp: Instant
-        +isOutOfStock(): boolean
-    }
-
-    class MarketTrendEvent <<record>> implements Event {
-        -totalEventsAnalyzed: int
-        -totalPriceDrops: int
-        -averageDiscountPercent: double
-        -timestamp: Instant
+package "observer.events" <<record>> {
+    class PriceChangedEvent
+    class StockChangedEvent
+    class MarketTrendEvent
+    class InspectionReportEvent {
+        categoryId: String
+        discountPercent: double
+        report: InventoryReport
     }
 }
+Event <|.. PriceChangedEvent
+Event <|.. StockChangedEvent
+Event <|.. MarketTrendEvent
+Event <|.. InspectionReportEvent
 
-package "com.marketplace.observer.subjects" {
-    abstract class "AbstractSubject<E extends Event>" as AbstractSubject implements Subject {
-        -listeners: Map<EventType, List<Observer<? super E>>>
+package "observer.subjects" {
+    abstract class "AbstractSubject<E>" as AbstractSubject {
+        -listeners: EnumMap<EventType, CopyOnWriteArrayList<Observer<? super E>>>
+        -failedDeliveries: AtomicInteger
     }
-
-    class PriceService extends AbstractSubject {
-        -priceStore: Map<String, Money>
-        +updatePrice(productId: String, categoryId: String, newPrice: Money): void
-        +getCurrentPrice(productId: String): Money
+    class PriceService {
+        +updatePrice(productId, categoryId, newPrice: Money)
     }
-
-    class InventoryService extends AbstractSubject {
-        -stockStore: Map<String, Integer>
-        +updateStock(productId: String, categoryId: String, newStock: int): void
-        +getStock(productId: String): int
+    class InventoryService {
+        +updateStock(productId, categoryId, newStock: int)
     }
-
-    class MarketplaceAggregator extends AbstractSubject implements Observer {
-        -totalEvents: AtomicInteger
-        -totalDrops: AtomicInteger
-        -accumulatedDiscount: DoubleAdder
-        +onEvent(event: PriceChangedEvent): void
+    class MarketplaceAggregator {
+        -stats: AtomicReference<Stats>
     }
 }
+Subject <|.. AbstractSubject
+AbstractSubject <|-- PriceService
+AbstractSubject <|-- InventoryService
+AbstractSubject <|-- MarketplaceAggregator
+Observer <|.. MarketplaceAggregator
 
-package "com.marketplace.observer.listeners" {
-    class WishlistNotifier implements Observer {
-        -watchedProductIds: Set<String>
-        +watch(productId: String): void
-        +onEvent(event: PriceChangedEvent): void
-    }
-
-    class SearchCacheInvalidator implements Observer {
-        -invalidationCount: AtomicInteger
-        +onEvent(event: Event): void
-    }
-
-    class AnalyticsTracker implements Observer {
-        -totalEventsRecorded: AtomicInteger
-        +onEvent(event: PriceChangedEvent): void
-    }
-
-    class InventoryAuditor implements Observer {
-        -outOfStockAlerts: AtomicInteger
-        +onEvent(event: StockChangedEvent): void
-    }
-
-    class PriceDropAlertService implements Observer {
+package "observer.listeners" {
+    class WishlistNotifier
+    class SearchCacheInvalidator
+    class AnalyticsTracker
+    class InventoryAuditor
+    class MarketTrendDashboard
+    class PromotionTicketDesk
+    class PriceDropAlertService {
         -catalog: Catalog
-        -discountThresholdPercent: double
-        +onEvent(event: PriceChangedEvent): void
+        -inspector: InventoryValueVisitor
+        +onEvent(e: PriceChangedEvent)
     }
 }
+Observer <|.. WishlistNotifier
+Observer <|.. SearchCacheInvalidator
+Observer <|.. AnalyticsTracker
+Observer <|.. InventoryAuditor
+Observer <|.. MarketTrendDashboard
+Observer <|.. PromotionTicketDesk
+Observer <|.. PriceDropAlertService
+AbstractSubject <|-- PriceDropAlertService
 
-package "com.marketplace.visitor.api" {
+package "visitor.api" {
     interface CatalogElement {
-        +accept(visitor: CatalogVisitor<R>): R
+        +<R> accept(v: CatalogVisitor<R>): R
     }
-
     interface "CatalogVisitor<R>" as CatalogVisitor {
-        +visit(catalog: Catalog): R
-        +visit(category: Category): R
-        +visit(product: PhysicalProduct): R
-        +visit(product: DigitalProduct): R
-        +visit(product: ServiceProduct): R
-        +visit(product: SubscriptionProduct): R
+        +visit(Catalog): R
+        +visit(Category): R
+        +visit(PhysicalProduct): R
+        +visit(DigitalProduct): R
+        +visit(ServiceProduct): R
+        +visit(SubscriptionProduct): R
+        +visit(GiftCardProduct): R
     }
 }
 
-package "com.marketplace.visitor.elements" {
-    class Catalog implements CatalogElement {
-        -id: String
-        -name: String
-        -categories: List<Category>
-        +addCategory(category: Category): void
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    class Category implements CatalogElement {
-        -id: String
-        -name: String
-        -children: List<CatalogElement>
-        +addChild(element: CatalogElement): void
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    class PhysicalProduct implements CatalogElement {
-        -id: String
-        -name: String
-        -price: Money
-        -weightKg: double
-        -stockQuantity: int
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    class DigitalProduct implements CatalogElement {
-        -id: String
-        -name: String
-        -price: Money
-        -downloadSizeMb: double
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    class ServiceProduct implements CatalogElement {
-        -id: String
-        -name: String
-        -hourlyRate: Money
-        -estimatedHours: int
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    class SubscriptionProduct implements CatalogElement {
-        -id: String
-        -name: String
-        -monthlyFee: Money
-        -periodInMonths: int
-        +accept(visitor: CatalogVisitor<R>): R
-    }
-
-    Catalog *-- Category : contains
-    Category *-- CatalogElement : contains
+package "visitor.elements" {
+    class Catalog
+    class Category
+    class PhysicalProduct
+    class DigitalProduct
+    class ServiceProduct
+    class SubscriptionProduct
+    class GiftCardProduct
 }
+CatalogElement <|.. Catalog
+CatalogElement <|.. Category
+CatalogElement <|.. PhysicalProduct
+CatalogElement <|.. DigitalProduct
+CatalogElement <|.. ServiceProduct
+CatalogElement <|.. SubscriptionProduct
+CatalogElement <|.. GiftCardProduct
+Catalog "1" *-- "*" Category
+Category "1" *-- "*" CatalogElement : children
 
-package "com.marketplace.visitor.visitors" {
-    class ShippingCostVisitor implements CatalogVisitor
-    class InventoryValueVisitor implements CatalogVisitor
-    class ProductFilterVisitor implements CatalogVisitor
-    class XmlExportVisitor implements CatalogVisitor
-}
-
-package "com.marketplace.integration" {
-    class PriceDropWorkflowHandler {
-        -catalog: Catalog
-        +handlePriceDrop(event: PriceChangedEvent): void
+package "visitor.visitors" {
+    abstract class "AggregatingCatalogVisitor<R>" as AggregatingCatalogVisitor {
+        #empty(): R
+        #combine(left: R, right: R): R
+        +visit(Catalog): R <<final>>
+        +visit(Category): R <<final>>
     }
+    class ShippingCostVisitor
+    class InventoryValueVisitor
+    class ProductFilterVisitor
+    class PriceTagFormattingVisitor
+    class XmlExportVisitor
+    class InventoryReport <<record>>
 }
+CatalogVisitor <|.. AggregatingCatalogVisitor
+CatalogVisitor <|.. XmlExportVisitor
+AggregatingCatalogVisitor <|-- ShippingCostVisitor
+AggregatingCatalogVisitor <|-- InventoryValueVisitor
+AggregatingCatalogVisitor <|-- ProductFilterVisitor
+AggregatingCatalogVisitor <|-- PriceTagFormattingVisitor
+InventoryValueVisitor ..> InventoryReport : returns
 
-' Связи между пакетами
-PriceDropAlertService --> PriceDropWorkflowHandler : delegates to
-PriceDropWorkflowHandler --> Catalog : locates subtree
-PriceDropWorkflowHandler ..> InventoryValueVisitor : executes on Category
-PriceService o-- PriceChangedEvent : publishes
-InventoryService o-- StockChangedEvent : publishes
-MarketplaceAggregator o-- MarketTrendEvent : publishes
-CatalogVisitor ..> CatalogElement : visits
+PriceService ..> PriceChangedEvent : publishes
+InventoryService ..> StockChangedEvent : publishes
+MarketplaceAggregator ..> MarketTrendEvent : publishes
+PriceDropAlertService ..> InspectionReportEvent : publishes
+PriceDropAlertService --> Category : inspects subtree
+PriceDropAlertService --> InventoryValueVisitor : runs
 @enduml

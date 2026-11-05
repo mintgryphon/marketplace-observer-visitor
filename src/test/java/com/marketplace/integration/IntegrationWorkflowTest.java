@@ -10,6 +10,7 @@ import com.marketplace.observer.subjects.PriceService;
 import com.marketplace.visitor.elements.Catalog;
 import com.marketplace.visitor.elements.Category;
 import com.marketplace.visitor.elements.PhysicalProduct;
+import com.marketplace.visitor.visitors.InventoryValueVisitor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,7 @@ class IntegrationWorkflowTest {
 
     @Test
     void shouldTriggerVisitorInspectionOnSubtreeWhenSignificantPriceDropOccurs() {
-        PriceDropAlertService alertService = new PriceDropAlertService(catalog, 20.0);
+        PriceDropAlertService alertService = new PriceDropAlertService(catalog, new InventoryValueVisitor(), 20.0);
         priceService.subscribe(EventType.PRICE_CHANGED, alertService);
 
         priceService.updatePrice("P-GAME", "CAT-1", Money.of(500.0));

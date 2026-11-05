@@ -5,7 +5,7 @@ import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
- * Неизменяемый Value Object для денежных сумм.
+ * Immutable value object for monetary amounts (scale 2, HALF_UP).
  */
 public final class Money implements Comparable<Money> {
     public static final Money ZERO = new Money(BigDecimal.ZERO);
@@ -43,6 +43,10 @@ public final class Money implements Comparable<Money> {
 
     public boolean isLessThan(Money other) {
         return this.compareTo(other) < 0;
+    }
+
+    public boolean isAtMost(Money other) {
+        return this.compareTo(other) <= 0;
     }
 
     @Override
